@@ -85,14 +85,30 @@ function buildQuarterTurn(axis: Vec, inLayer: (p: Vec) => boolean): number[] {
 
 const compose = (a: number[], b: number[]) => b.map((k) => a[k]); // a then b
 
-/** Base clockwise quarter turns: 6 faces + whole-cube rotations x, y, z. */
-const BASE: Record<string, number[]> = {};
-for (const f of FACES) {
-  BASE[f] = buildQuarterTurn(NORMAL[f], (p) => dot(p, NORMAL[f]) === 1);
+/** Axis and layer of each base turn: 6 faces + whole-cube rotations x, y, z. */
+const TURNS: Record<string, { axis: Vec; inLayer: (p: Vec) => boolean }> = {
+  ...Object.fromEntries(
+    FACES.map((f) => [f, { axis: NORMAL[f], inLayer: (p: Vec) => dot(p, NORMAL[f]) === 1 }]),
+  ),
+  x: { axis: NORMAL.R, inLayer: () => true }, // turns like R
+  y: { axis: NORMAL.U, inLayer: () => true }, // turns like U
+  z: { axis: NORMAL.F, inLayer: () => true }, // turns like F
+};
+
+/** Base clockwise quarter turns, as sticker permutations. */
+const BASE: Record<string, number[]> = Object.fromEntries(
+  Object.entries(TURNS).map(([m, t]) => [m, buildQuarterTurn(t.axis, t.inLayer)]),
+);
+
+/**
+ * For animation: which axis a move turns about, which cubie positions turn,
+ * and the angle in radians (right-hand rule, so clockwise is negative).
+ */
+export function turnInfo(move: Move) {
+  const { axis, inLayer } = TURNS[move[0]];
+  const quarters = move.endsWith("2") ? 2 : move.endsWith("'") ? -1 : 1;
+  return { axis, inLayer, angle: (-Math.PI / 2) * quarters };
 }
-BASE.x = buildQuarterTurn(NORMAL.R, () => true); // turns like R
-BASE.y = buildQuarterTurn(NORMAL.U, () => true); // turns like U
-BASE.z = buildQuarterTurn(NORMAL.F, () => true); // turns like F
 
 /** Full move table: "R", "R'", "R2", "y", "y'", "x2", ... */
 export const MOVES: Record<string, number[]> = {};
