@@ -95,8 +95,9 @@ export default function Painter({ stickers, brush, errors, onBrush, onPaint, onR
 
       <aside className="flex flex-col gap-6">
         <div className="chunky relative aspect-square overflow-hidden bg-paper-deep">
-          <span className="absolute top-3 left-3 z-10 rounded-full border-2 border-ink bg-card px-2.5 py-0.5 text-xs font-bold">LIVE PREVIEW · drag me</span>
-          <Cube3D stickers={stickers} autoRotate />
+          <span className="absolute top-3 left-3 z-10 rounded-full border-2 border-ink bg-card px-2.5 py-0.5 text-xs font-bold">LIVE PREVIEW · drag to look around</span>
+          {/* Stays still while painting; it only moves when you drag it. */}
+          <Cube3D stickers={stickers} />
         </div>
         <div className="chunky bg-cube-blue/15 p-5 text-sm">
           <p className="font-display text-lg">How to paint each face</p>

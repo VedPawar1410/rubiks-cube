@@ -13,7 +13,9 @@ const Cube3D = dynamic(() => import("./Cube3D"), { ssr: false });
 
 /** One accent colour per stage for the timeline chips. */
 const STAGE_COLORS = ["var(--white)", "var(--green)", "var(--red)", "var(--blue)", "var(--yellow)", "var(--orange)", "var(--pink)", "var(--green)"];
-const SPEEDS = [0.5, 1, 2];
+const SPEEDS = [0.2, 0.5, 1, 1.5, 2];
+const BASE_TURN_MS = 800;
+const BASE_PAUSE_MS = 400;
 
 const FACE_NAME: Record<string, string> = { U: "top", D: "bottom", R: "right", L: "left", F: "front", B: "back" };
 /** "R'" → "Turn the right face counter-clockwise". */
@@ -52,41 +54,61 @@ export default function SolutionView({ solution, onEdit }: { solution: Solution;
   const [speed, setSpeed] = useState(1);
   const [view, setView] = useState<"player" | "list">("player");
   const nextId = useRef(0);
-  const duration = 480 / speed;
+  // At 1×: each turn takes 800ms, then a 400ms breather before the next one
+  // while playing, so every move is easy to follow. Speed scales both.
+  const duration = BASE_TURN_MS / speed;
+  const pause = BASE_PAUSE_MS / speed;
   const done = pos === total && !anim;
+
+  // The pending "start the next turn" timer while playing.
+  const gapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelGap = () => {
+    if (gapTimer.current) clearTimeout(gapTimer.current);
+    gapTimer.current = null;
+  };
+  useEffect(() => cancelGap, []);
 
   const forward = useCallback(() => {
     if (anim || pos >= total) return;
+    cancelGap();
     setAnim({ move: flat[pos].move, duration, id: ++nextId.current, dir: 1 });
   }, [anim, pos, total, flat, duration]);
 
   const back = useCallback(() => {
     if (anim || pos <= 0) return;
+    cancelGap();
     setPlaying(false);
     setAnim({ move: invertMove(flat[pos - 1].move), duration, id: ++nextId.current, dir: -1 });
   }, [anim, pos, flat, duration]);
 
   const jump = (to: number) => {
+    cancelGap();
     setPlaying(false);
     setAnim(null);
     setPos(to);
   };
 
-  // When a turn lands, commit it — and while playing, chain straight into the next one.
+  // When a turn lands, commit it — and while playing, queue the next one after a short pause.
   const onAnimationEnd = () => {
     if (!anim) return;
     const next = pos + anim.dir;
     setPos(next);
+    setAnim(null);
     if (playing && anim.dir === 1 && next < total) {
-      setAnim({ move: flat[next].move, duration, id: ++nextId.current, dir: 1 });
-    } else {
-      setAnim(null);
-      if (next >= total) setPlaying(false);
+      gapTimer.current = setTimeout(() => {
+        gapTimer.current = null;
+        setAnim({ move: flat[next].move, duration, id: ++nextId.current, dir: 1 });
+      }, pause);
+    } else if (next >= total) {
+      setPlaying(false);
     }
   };
 
   const togglePlay = useCallback(() => {
-    if (playing) return setPlaying(false); // the turn in flight finishes, then it stops
+    if (playing) {
+      cancelGap(); // the turn in flight finishes, then it stops
+      return setPlaying(false);
+    }
     setPlaying(true);
     forward();
   }, [playing, forward]);
@@ -217,9 +239,24 @@ export default function SolutionView({ solution, onEdit }: { solution: Solution;
                 {playing ? "❚❚ Pause" : "▶ Play"}
               </button>
               <button onClick={() => { setPlaying(false); forward(); }} disabled={pos >= total} className="toy-btn bg-card px-3 py-2" aria-label="Next move">▶</button>
-              <button onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])} className="toy-btn bg-card px-3 py-2 font-notation text-sm" aria-label="Change speed">
-                {speed}×
-              </button>
+
+              {/* Speed: every option visible, so slowing right down is one tap. */}
+              <div className="flex w-full items-center justify-center gap-2 pt-1">
+                <span className="text-xs font-bold tracking-widest text-ink-soft uppercase">Speed</span>
+                <div className="flex rounded-2xl border-[3px] border-ink bg-card p-0.5" role="radiogroup" aria-label="Playback speed">
+                  {SPEEDS.map((s) => (
+                    <button
+                      key={s}
+                      role="radio"
+                      aria-checked={speed === s}
+                      onClick={() => setSpeed(s)}
+                      className={`rounded-xl px-2.5 py-1 font-notation text-sm transition-colors ${speed === s ? "bg-ink text-white" : "hover:bg-paper-deep"}`}
+                    >
+                      {s}×
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
             <p className="text-center text-xs text-ink-soft">Space = play/pause · ← → = step · drag the cube to look around</p>
           </div>
